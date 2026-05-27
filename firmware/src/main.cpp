@@ -7,6 +7,7 @@
 #include "data.h"
 #include "ui.h"
 #include "ble.h"
+#include "wifi_manager.h"
 #include "splash.h"
 #include "usage_rate.h"
 #include "idle.h"
@@ -213,6 +214,7 @@ void setup() {
     lv_indev_set_read_cb(indev, my_touch_cb);
 
     ble_init();
+    wifi_init();
     input_hal_init();
 
     ui_init();
@@ -227,6 +229,7 @@ void setup() {
 static ble_state_t last_ble_state = BLE_STATE_INIT;
 
 void loop() {
+    wifi_loop();
     idle_tick();
     lv_timer_handler();
     ui_tick_anim();

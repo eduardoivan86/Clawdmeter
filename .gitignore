@@ -2,6 +2,9 @@
 firmware/.pio/
 firmware/.vscode/
 
+# Local secrets (do not commit)
+/firmware/src/secrets.h
+
 # OS
 .DS_Store
 

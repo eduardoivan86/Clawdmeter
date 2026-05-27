@@ -4,6 +4,7 @@
 #include "logo.h"
 #include "icons.h"
 #include "hal/board_caps.h"
+#include "wifi_manager.h"
 
 // Custom fonts (scaled for 314 PPI, ~1.9x from original 165 PPI)
 LV_FONT_DECLARE(font_tiempos_56);
@@ -117,6 +118,7 @@ static lv_obj_t* ble_container;
 static lv_obj_t* lbl_ble_status;
 static lv_obj_t* lbl_ble_device;
 static lv_obj_t* lbl_ble_mac;
+static lv_obj_t* lbl_wifi_status;
 
 // ---- Battery indicator (shared, on top) ----
 static lv_obj_t* battery_img;
@@ -377,6 +379,24 @@ static void init_bluetooth_screen(lv_obj_t* scr) {
     lv_obj_set_style_text_font(lbl_ble_mac, L.bt_device_font, 0);
     lv_obj_set_style_text_color(lbl_ble_mac, COL_DIM, 0);
     lv_obj_set_pos(lbl_ble_mac, 0, 100);
+
+    lbl_wifi_status = lv_label_create(p_info);
+    lv_label_set_text(lbl_wifi_status, "WiFi: --");
+    lv_obj_set_style_text_font(lbl_wifi_status, L.bt_device_font, 0);
+    lv_obj_set_style_text_color(lbl_wifi_status, COL_DIM, 0);
+    lv_obj_set_pos(lbl_wifi_status, 0, 132);
+
+    lv_timer_create([](lv_timer_t*) {
+        if (!lbl_wifi_status) return;
+        if (wifi_is_connected()) {
+            String ip = wifi_get_ip();
+            lv_label_set_text_fmt(lbl_wifi_status, "WiFi: %s", ip.c_str());
+            lv_obj_set_style_text_color(lbl_wifi_status, COL_GREEN, 0);
+        } else {
+            lv_label_set_text(lbl_wifi_status, "WiFi: --");
+            lv_obj_set_style_text_color(lbl_wifi_status, COL_DIM, 0);
+        }
+    }, 2000, nullptr);
 
     int reset_y = L.content_y + L.bt_info_panel_h + 16;
     lv_obj_t* reset_zone = lv_obj_create(ble_container);
