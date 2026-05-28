@@ -208,6 +208,7 @@ static void format_reset_time(int mins, char* buf, size_t len) {
 // Forward decls — callbacks defined near ui_show_screen below
 static void global_click_cb(lv_event_t* e);
 static void splash_gesture_cb(lv_event_t* e);
+static void wifi_label_long_press_cb(lv_event_t* e);
 static void ble_reset_click_cb(lv_event_t* e);
 
 static lv_obj_t* make_panel(lv_obj_t* parent, int x, int y, int w, int h) {
@@ -390,6 +391,9 @@ static void init_bluetooth_screen(lv_obj_t* scr) {
     lv_obj_set_style_text_font(lbl_wifi_status, L.bt_device_font, 0);
     lv_obj_set_style_text_color(lbl_wifi_status, COL_DIM, 0);
     lv_obj_set_pos(lbl_wifi_status, 0, 132);
+    lv_obj_add_flag(lbl_wifi_status, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(lbl_wifi_status, wifi_label_long_press_cb,
+                        LV_EVENT_LONG_PRESSED, NULL);
 
     lv_timer_create([](lv_timer_t*) {
         if (!lbl_wifi_status) return;
@@ -572,6 +576,82 @@ static void global_click_cb(lv_event_t* e) {
 static void splash_gesture_cb(lv_event_t* e) {
     (void)e;
     splash_next();
+}
+
+// ---- WiFi setup-mode trigger (long-press on the WiFi label) ----
+// Drops into wifi_force_setup_mode(), which never returns — confirms first
+// so an accidental long-press doesn't kick the user offline.
+static lv_obj_t* wifi_setup_overlay = nullptr;
+
+static void wifi_setup_overlay_close() {
+    if (!wifi_setup_overlay) return;
+    lv_obj_delete(wifi_setup_overlay);
+    wifi_setup_overlay = nullptr;
+}
+
+static void wifi_setup_yes_cb(lv_event_t*) {
+    wifi_force_setup_mode();  // never returns
+}
+
+static void wifi_setup_cancel_cb(lv_event_t*) {
+    wifi_setup_overlay_close();
+}
+
+static void wifi_label_long_press_cb(lv_event_t*) {
+    if (wifi_setup_overlay)   return;
+    if (!ble_container)       return;
+
+    const int W = board_caps().width;
+    const int H = board_caps().height;
+
+    wifi_setup_overlay = lv_obj_create(ble_container);
+    lv_obj_set_size(wifi_setup_overlay, W, H);
+    lv_obj_set_pos(wifi_setup_overlay, 0, 0);
+    lv_obj_set_style_bg_color(wifi_setup_overlay, COL_BG, 0);
+    lv_obj_set_style_bg_opa(wifi_setup_overlay, LV_OPA_90, 0);
+    lv_obj_set_style_border_width(wifi_setup_overlay, 0, 0);
+    lv_obj_clear_flag(wifi_setup_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(wifi_setup_overlay, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(wifi_setup_overlay, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(wifi_setup_overlay, 14, 0);
+
+    lv_obj_t* title = lv_label_create(wifi_setup_overlay);
+    lv_label_set_text(title, "Cambiar WiFi?");
+    lv_obj_set_style_text_font(title, &font_styrene_28, 0);
+    lv_obj_set_style_text_color(title, COL_TEXT, 0);
+
+    lv_obj_t* body = lv_label_create(wifi_setup_overlay);
+    lv_label_set_text(body, "Reinicia como AP\nClawdmeter-Setup\nhttp://192.168.4.1");
+    lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(body, W - 80);
+    lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(body, L.bt_device_font, 0);
+    lv_obj_set_style_text_color(body, COL_DIM, 0);
+
+    lv_obj_t* cancel_btn = lv_button_create(wifi_setup_overlay);
+    lv_obj_set_size(cancel_btn, 320, 60);
+    lv_obj_set_style_bg_color(cancel_btn, COL_PANEL, 0);
+    lv_obj_set_style_radius(cancel_btn, 12, 0);
+    lv_obj_set_style_border_width(cancel_btn, 0, 0);
+    lv_obj_t* cancel_lbl = lv_label_create(cancel_btn);
+    lv_label_set_text(cancel_lbl, "Cancel");
+    lv_obj_set_style_text_color(cancel_lbl, COL_DIM, 0);
+    lv_obj_set_style_text_font(cancel_lbl, L.bt_device_font, 0);
+    lv_obj_center(cancel_lbl);
+    lv_obj_add_event_cb(cancel_btn, wifi_setup_cancel_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t* yes_btn = lv_button_create(wifi_setup_overlay);
+    lv_obj_set_size(yes_btn, 320, 60);
+    lv_obj_set_style_bg_color(yes_btn, COL_ACCENT, 0);
+    lv_obj_set_style_radius(yes_btn, 12, 0);
+    lv_obj_set_style_border_width(yes_btn, 0, 0);
+    lv_obj_t* yes_lbl = lv_label_create(yes_btn);
+    lv_label_set_text(yes_lbl, "Si, reiniciar a AP");
+    lv_obj_set_style_text_color(yes_lbl, COL_TEXT, 0);
+    lv_obj_set_style_text_font(yes_lbl, L.bt_device_font, 0);
+    lv_obj_center(yes_lbl);
+    lv_obj_add_event_cb(yes_btn, wifi_setup_yes_cb, LV_EVENT_CLICKED, NULL);
 }
 
 static void ble_reset_click_cb(lv_event_t* e) {
