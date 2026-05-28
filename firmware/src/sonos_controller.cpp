@@ -94,8 +94,11 @@ void sonos_ctrl_init() {
     ESP_LOGI(TAG, "begin() -> %d, free heap=%u min=%u",
              (int)r, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
 
+    // 8 KB stack — same reason as knob_action_task: the Sonos SOAP path
+    // (sendSoapRequest -> formatSoapRequest with String concatenation)
+    // uses ~5 KB. 4 KB overflows into _xt_alloca_exc on getVolume too.
     BaseType_t t = xTaskCreatePinnedToCore(
-        sonos_poll_task, "sonos_poll", 4096, NULL, 1, NULL, 0);
+        sonos_poll_task, "sonos_poll", 8192, NULL, 1, NULL, 0);
     ESP_LOGI(TAG, "poll task create -> %d, free heap=%u",
              (int)t, (unsigned)ESP.getFreeHeap());
 }
