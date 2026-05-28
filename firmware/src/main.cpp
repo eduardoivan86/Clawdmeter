@@ -3,6 +3,7 @@
 #include <lvgl.h>
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
+#include <esp_log.h>
 
 #include "data.h"
 #include "ui.h"
@@ -288,6 +289,14 @@ void loop() {
                 if (ui_get_current_screen() == SCREEN_SPLASH) splash_next();
                 else                                          ui_cycle_screen();
             }
+        }
+
+        // Long-press is an explicit "rest the screen" gesture — bypasses
+        // idle_consume_wake_press (would just immediately wake again) and
+        // forces sleep regardless of USB power state.
+        if (power_hal_pwr_long_pressed()) {
+            ESP_LOGI("pwr", "long-press -> force sleep");
+            idle_force_sleep();
         }
     }
 

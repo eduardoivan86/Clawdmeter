@@ -72,3 +72,7 @@ bool power_hal_pwr_pressed(void) {
     }
     return false;
 }
+
+// Long-press not wired on this board yet (PWR comes from IO expander, not
+// PMU PKEY). Stub returns false so cross-board API compiles.
+bool power_hal_pwr_long_pressed(void) { return false; }

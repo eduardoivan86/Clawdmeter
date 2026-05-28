@@ -17,3 +17,8 @@ bool power_hal_is_vbus_in(void);   // USB cable present (true even without a bat
 
 // Edge-triggered: returns true once per PWR short-press, then clears.
 bool power_hal_pwr_pressed(void);
+
+// Edge-triggered: returns true once when the PWR button has been held long
+// enough to fire the PMU's long-press IRQ (configured at ~2s on AXP2101).
+// Boards without a real long-press distinction may stub this to false.
+bool power_hal_pwr_long_pressed(void);

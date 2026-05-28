@@ -5,6 +5,11 @@ void idle_init(void);
 void idle_tick(void);
 void idle_note_activity(void);
 
+// Manual sleep trigger (e.g. PWR long-press). Begins fade-out immediately
+// and bypasses the IDLE_SLEEP_WHEN_CHARGING gate that auto-sleep honours —
+// manual sleep is explicit user intent regardless of power source.
+void idle_force_sleep(void);
+
 // Returns true if this press was consumed as a wake-up (caller MUST skip the
 // button's normal action). Returns false when already awake — also notes the
 // activity, so callers don't need a separate idle_note_activity() call.

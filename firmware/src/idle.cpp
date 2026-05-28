@@ -45,6 +45,13 @@ void idle_note_activity(void) {
     state = STATE_FADING_IN;
 }
 
+void idle_force_sleep(void) {
+    if (state == STATE_ASLEEP || state == STATE_FADING_OUT) return;
+    uint32_t now = millis();
+    begin_fade(0, now);
+    state = STATE_FADING_OUT;
+}
+
 bool idle_consume_wake_press(void) {
     if (state == STATE_ASLEEP || state == STATE_FADING_OUT) {
         uint32_t now = millis();

@@ -76,3 +76,7 @@ bool power_hal_pwr_pressed(void) {
     }
     return false;
 }
+
+// Long-press not wired on this board yet. Mirror the 2.16-S3 logic when
+// needed: XPOWERS_AXP2101_PKEY_LONG_IRQ + setPowerKeyPressOnTime.
+bool power_hal_pwr_long_pressed(void) { return false; }

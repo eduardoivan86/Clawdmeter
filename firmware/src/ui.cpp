@@ -7,6 +7,7 @@
 #include "wifi_manager.h"
 #include "screen_sonos.h"
 #include "sonos_controller.h"
+#include "hal/power_hal.h"
 
 // Custom fonts (scaled for 314 PPI, ~1.9x from original 165 PPI)
 LV_FONT_DECLARE(font_tiempos_56);
@@ -64,7 +65,7 @@ static void compute_layout(const BoardCaps& c) {
         L.usage_panel_gap = 16;
         L.usage_bar_y = 56;
         L.usage_reset_y = 94;
-        L.bt_info_panel_h = 160;
+        L.bt_info_panel_h = 200;
         L.bt_reset_zone_h = 110;
         L.bt_title_font    = &font_tiempos_56;
         L.bt_status_font   = &font_styrene_48;
@@ -78,7 +79,7 @@ static void compute_layout(const BoardCaps& c) {
         L.usage_panel_gap = 12;
         L.usage_bar_y = 48;
         L.usage_reset_y = 78;
-        L.bt_info_panel_h = 140;
+        L.bt_info_panel_h = 180;
         L.bt_reset_zone_h = 90;
         L.bt_title_font    = &font_tiempos_34;
         L.bt_status_font   = &font_styrene_28;
@@ -121,6 +122,7 @@ static lv_obj_t* lbl_ble_status;
 static lv_obj_t* lbl_ble_device;
 static lv_obj_t* lbl_ble_mac;
 static lv_obj_t* lbl_wifi_status;
+static lv_obj_t* lbl_battery_text = nullptr;
 
 // ---- Battery indicator (shared, on top) ----
 static lv_obj_t* battery_img;
@@ -400,6 +402,39 @@ static void init_bluetooth_screen(lv_obj_t* scr) {
             lv_obj_set_style_text_color(lbl_wifi_status, COL_DIM, 0);
         }
     }, 2000, nullptr);
+
+    lbl_battery_text = lv_label_create(p_info);
+    lv_label_set_text(lbl_battery_text, "Bat: --");
+    lv_obj_set_style_text_font(lbl_battery_text, &font_styrene_20, 0);
+    lv_obj_set_style_text_color(lbl_battery_text, COL_DIM, 0);
+    lv_obj_set_pos(lbl_battery_text, 0, 168);
+
+    lv_timer_create([](lv_timer_t*) {
+        if (!lbl_battery_text) return;
+        int  pct      = power_hal_battery_pct();
+        bool charging = power_hal_is_charging();
+        bool vbus     = power_hal_is_vbus_in();
+        if (pct < 0 && vbus) {
+            // USB power, no battery detected
+            lv_label_set_text(lbl_battery_text, "USB +");
+            lv_obj_set_style_text_color(lbl_battery_text, COL_GREEN, 0);
+        } else if (pct < 0) {
+            lv_label_set_text(lbl_battery_text, "Bat: --");
+            lv_obj_set_style_text_color(lbl_battery_text, COL_DIM, 0);
+        } else if (charging) {
+            lv_label_set_text_fmt(lbl_battery_text, "Bat: %d%% +", pct);
+            lv_obj_set_style_text_color(lbl_battery_text, COL_GREEN, 0);
+        } else if (pct < 10) {
+            lv_label_set_text_fmt(lbl_battery_text, "Bat: %d%%", pct);
+            lv_obj_set_style_text_color(lbl_battery_text, COL_RED, 0);
+        } else if (pct < 20) {
+            lv_label_set_text_fmt(lbl_battery_text, "Bat: %d%%", pct);
+            lv_obj_set_style_text_color(lbl_battery_text, COL_AMBER, 0);
+        } else {
+            lv_label_set_text_fmt(lbl_battery_text, "Bat: %d%%", pct);
+            lv_obj_set_style_text_color(lbl_battery_text, COL_DIM, 0);
+        }
+    }, 30000, nullptr);
 
     int reset_y = L.content_y + L.bt_info_panel_h + 16;
     lv_obj_t* reset_zone = lv_obj_create(ble_container);

@@ -118,18 +118,9 @@ static void speaker_selector_open() {
              (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
 }
 
-static void screen_sonos_gesture_cb(lv_event_t*) {
-    lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
-    ESP_LOGI(TAG, "gesture dir=%d", (int)dir);
-    if (dir == LV_DIR_BOTTOM) {
-        speaker_selector_open();
-    }
-}
-
-// Primary trigger for the speaker selector — swipe-down gesture is flaky on
-// this touch driver, so long-press on the header is the reliable way in.
+// Long-press on the header is the way into the selector. LV_EVENT_GESTURE
+// (swipe-down) did not fire reliably on the CST9220 touch driver — removed.
 static void header_long_press_cb(lv_event_t*) {
-    ESP_LOGI(TAG, "header long-press -> open selector");
     speaker_selector_open();
 }
 
@@ -201,7 +192,6 @@ void screen_sonos_init(lv_obj_t* parent_scr) {
     lv_obj_set_style_border_width(sonos_container, 0, 0);
     lv_obj_set_style_pad_all(sonos_container, 0, 0);
     lv_obj_clear_flag(sonos_container, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(sonos_container, screen_sonos_gesture_cb, LV_EVENT_GESTURE, NULL);
 
     // ---- Header (tappable, room name + wifi mini) ----
     lv_obj_t* header = lv_obj_create(sonos_container);
