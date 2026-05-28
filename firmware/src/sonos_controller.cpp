@@ -6,6 +6,7 @@
 #include "sonos_grouping.h"
 #include <Arduino.h>
 #include <Sonos.h>
+#include <Preferences.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -32,9 +33,21 @@ static const Room rooms[] = {
 static Sonos sonos;
 static SemaphoreHandle_t sonos_mutex = nullptr;
 
-static SonosMode active_mode  = MODE_SINGLE_LR;
+static SonosMode active_mode   = MODE_SINGLE_LR;
 static int       cached_volume = -1;
 static bool      cached_mute   = false;
+static bool      cached_play   = false;
+
+static const char* NVS_NS         = "sonos";
+static const char* NVS_KEY_MODE   = "mode";
+
+static void persist_mode() {
+    Preferences p;
+    if (p.begin(NVS_NS, false)) {
+        p.putUChar(NVS_KEY_MODE, (uint8_t)active_mode);
+        p.end();
+    }
+}
 
 static inline bool ok(SonosResult r) {
     return r == SonosResult::SUCCESS;
@@ -65,6 +78,17 @@ static void sonos_poll_task(void* arg) {
 void sonos_ctrl_init() {
     if (!sonos_mutex) {
         sonos_mutex = xSemaphoreCreateMutex();
+    }
+    // Restore last-chosen mode from NVS so the user's selection survives
+    // reboots and the knob always targets the room they last picked.
+    Preferences p;
+    if (p.begin(NVS_NS, true)) {
+        uint8_t v = p.getUChar(NVS_KEY_MODE, (uint8_t)MODE_SINGLE_LR);
+        p.end();
+        if (v <= (uint8_t)MODE_BOTH) {
+            active_mode = (SonosMode)v;
+            ESP_LOGI(TAG, "restored mode=%d (%s)", (int)v, sonos_ctrl_get_mode_label());
+        }
     }
     SonosResult r = sonos.begin();
     ESP_LOGI(TAG, "begin() -> %d, free heap=%u min=%u",
@@ -118,6 +142,8 @@ bool sonos_ctrl_set_mode(SonosMode m) {
     active_mode   = m;
     cached_volume = -1;
     cached_mute   = false;
+    cached_play   = false;  // assume stopped after a mode switch
+    persist_mode();
     ESP_LOGI(TAG, "mode -> %d (%s), free heap=%u min=%u",
              (int)m, sonos_ctrl_get_mode_label(),
              (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
@@ -198,6 +224,7 @@ bool sonos_ctrl_play() {
     if (!wifi_is_connected()) return false;
     xSemaphoreTake(sonos_mutex, portMAX_DELAY);
     bool result = ok(sonos.play(active_target_ip()));
+    if (result) cached_play = true;
     xSemaphoreGive(sonos_mutex);
     ESP_LOGI(TAG, "play %s", result ? "ok" : "FAIL");
     return result;
@@ -207,9 +234,19 @@ bool sonos_ctrl_pause() {
     if (!wifi_is_connected()) return false;
     xSemaphoreTake(sonos_mutex, portMAX_DELAY);
     bool result = ok(sonos.pause(active_target_ip()));
+    if (result) cached_play = false;
     xSemaphoreGive(sonos_mutex);
     ESP_LOGI(TAG, "pause %s", result ? "ok" : "FAIL");
     return result;
+}
+
+bool sonos_ctrl_is_playing() {
+    return cached_play;
+}
+
+bool sonos_ctrl_toggle_play_pause() {
+    if (cached_play) return sonos_ctrl_pause();
+    else             return sonos_ctrl_play();
 }
 
 bool sonos_ctrl_next() {

@@ -26,3 +26,10 @@ bool  sonos_ctrl_next();
 bool  sonos_ctrl_previous();
 bool  sonos_ctrl_toggle_mute();
 bool  sonos_ctrl_is_muted();
+
+// Local play/pause cache + toggle. Knob 1-tap and screen play button both
+// call this so the UI icon stays in sync with the user's last intent.
+// (Sonos itself has no Transport state poll in the rupakpoddar lib, so this
+// can desync if play state is changed from outside; acceptable trade-off.)
+bool  sonos_ctrl_toggle_play_pause();
+bool  sonos_ctrl_is_playing();

@@ -144,11 +144,15 @@ static void slider_event_cb(lv_event_t* e) {
     }
 }
 
+static void update_play_pause_visual() {
+    if (!lbl_play_pause) return;
+    bool p = sonos_ctrl_is_playing();
+    lv_label_set_text(lbl_play_pause, p ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+}
+
 static void play_pause_click_cb(lv_event_t*) {
-    play_state = !play_state;
-    lv_label_set_text(lbl_play_pause, play_state ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
-    if (play_state) sonos_ctrl_play();
-    else            sonos_ctrl_pause();
+    sonos_ctrl_toggle_play_pause();
+    update_play_pause_visual();
 }
 
 static void update_mute_visual() {
@@ -293,4 +297,5 @@ void screen_sonos_update() {
     update_wifi_label();
     update_volume_widgets();
     update_mute_visual();
+    update_play_pause_visual();
 }
