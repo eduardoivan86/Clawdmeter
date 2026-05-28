@@ -10,6 +10,7 @@
 #include "ble.h"
 #include "wifi_manager.h"
 #include "sonos_controller.h"
+#include "knob_scanner.h"
 #include "splash.h"
 #include "usage_rate.h"
 #include "idle.h"
@@ -218,6 +219,7 @@ void setup() {
     ble_init();
     wifi_init();
     sonos_ctrl_init();
+    knob_scanner_init();
     input_hal_init();
 
     ui_init();
