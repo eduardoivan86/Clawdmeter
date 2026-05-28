@@ -5,6 +5,8 @@
 #include "icons.h"
 #include "hal/board_caps.h"
 #include "wifi_manager.h"
+#include "screen_sonos.h"
+#include "sonos_controller.h"
 
 // Custom fonts (scaled for 314 PPI, ~1.9x from original 165 PPI)
 LV_FONT_DECLARE(font_tiempos_56);
@@ -203,6 +205,7 @@ static void format_reset_time(int mins, char* buf, size_t len) {
 
 // Forward decls — callbacks defined near ui_show_screen below
 static void global_click_cb(lv_event_t* e);
+static void splash_gesture_cb(lv_event_t* e);
 static void ble_reset_click_cb(lv_event_t* e);
 
 static lv_obj_t* make_panel(lv_obj_t* parent, int x, int y, int w, int h) {
@@ -451,10 +454,12 @@ void ui_init(void) {
 
     init_usage_screen(scr);
     init_bluetooth_screen(scr);
+    screen_sonos_init(scr);
     splash_init(scr);
 
     if (splash_get_root()) {
-        lv_obj_add_event_cb(splash_get_root(), global_click_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_add_event_cb(splash_get_root(), global_click_cb,   LV_EVENT_CLICKED, NULL);
+        lv_obj_add_event_cb(splash_get_root(), splash_gesture_cb, LV_EVENT_GESTURE, NULL);
     }
 
     logo_img = lv_image_create(scr);
@@ -515,14 +520,23 @@ void ui_tick_anim(void) {
 static screen_t prev_non_splash_screen = SCREEN_USAGE;
 static void apply_battery_visibility(void) {
     if (!battery_img) return;
-    if (current_screen == SCREEN_SPLASH) lv_obj_add_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
-    else                                  lv_obj_clear_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
+    if (current_screen == SCREEN_SPLASH || current_screen == SCREEN_SONOS) {
+        lv_obj_add_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_clear_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 static void global_click_cb(lv_event_t* e) {
     (void)e;
     if (current_screen == SCREEN_SPLASH) ui_show_screen(prev_non_splash_screen);
     else                                  ui_show_screen(SCREEN_SPLASH);
+}
+
+// Swipe anywhere on splash cycles to the next animation (parity with PWR).
+static void splash_gesture_cb(lv_event_t* e) {
+    (void)e;
+    splash_next();
 }
 
 static void ble_reset_click_cb(lv_event_t* e) {
@@ -533,18 +547,27 @@ static void ble_reset_click_cb(lv_event_t* e) {
 void ui_show_screen(screen_t screen) {
     lv_obj_add_flag(usage_container, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(ble_container, LV_OBJ_FLAG_HIDDEN);
+    screen_sonos_hide();
     splash_hide();
 
     switch (screen) {
     case SCREEN_SPLASH:     splash_show(); break;
     case SCREEN_USAGE:      lv_obj_clear_flag(usage_container, LV_OBJ_FLAG_HIDDEN); break;
     case SCREEN_BLUETOOTH:  lv_obj_clear_flag(ble_container, LV_OBJ_FLAG_HIDDEN); break;
+    case SCREEN_SONOS:
+        screen_sonos_show();
+        sonos_ctrl_refresh_volume();
+        screen_sonos_update();
+        break;
     default: break;
     }
 
     if (logo_img) {
-        if (screen == SCREEN_SPLASH) lv_obj_add_flag(logo_img, LV_OBJ_FLAG_HIDDEN);
-        else                          lv_obj_clear_flag(logo_img, LV_OBJ_FLAG_HIDDEN);
+        if (screen == SCREEN_SPLASH || screen == SCREEN_SONOS) {
+            lv_obj_add_flag(logo_img, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_clear_flag(logo_img, LV_OBJ_FLAG_HIDDEN);
+        }
     }
 
     if (screen != SCREEN_SPLASH) prev_non_splash_screen = screen;
@@ -553,10 +576,16 @@ void ui_show_screen(screen_t screen) {
 }
 
 void ui_cycle_screen(void) {
+    // PWR rotates only between real screens (option B). SPLASH stays accessible
+    // via tap on any non-splash screen (global_click_cb) — keeps the splash
+    // animation as a deliberate "I want to see it" gesture, not a side-effect
+    // of cycling.
     screen_t next;
     switch (current_screen) {
     case SCREEN_USAGE:     next = SCREEN_BLUETOOTH; break;
-    case SCREEN_BLUETOOTH: next = SCREEN_USAGE;     break;
+    case SCREEN_BLUETOOTH: next = SCREEN_SONOS;     break;
+    case SCREEN_SONOS:     next = SCREEN_USAGE;     break;
+    case SCREEN_SPLASH:    next = SCREEN_USAGE;     break;
     default:               next = SCREEN_USAGE;     break;
     }
     ui_show_screen(next);
