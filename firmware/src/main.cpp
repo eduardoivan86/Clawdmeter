@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
+#include <driver/gpio.h>
 
 #include "data.h"
 #include "ui.h"
@@ -184,6 +185,14 @@ void setup() {
     Serial.begin(115200);
     delay(300);
     Serial.println("{\"ready\":true}");
+
+    // Pre-install the GPIO ISR service from the main task (4 KB stack) so the
+    // heavy esp_intr_alloc -> heap_caps_malloc path doesn't fire later from
+    // the ipc1 task (1 KB stack, baked into the precompiled IDF). Without
+    // this, the cross-core ISR register triggered inside the touch driver
+    // would overflow the ipc1 canary intermittently. ESP_OK on first call,
+    // ESP_ERR_INVALID_STATE on already-installed (both harmless here).
+    gpio_install_isr_service(0);
 
     board_init();
 
