@@ -14,6 +14,7 @@ void power_hal_tick(void);
 int  power_hal_battery_pct(void);  // 0..100, or -1 if no battery (see BoardCaps.has_battery)
 bool power_hal_is_charging(void);
 bool power_hal_is_vbus_in(void);   // USB cable present (true even without a battery)
+bool power_hal_has_battery(void);  // physically connected (PMU battery-detect), not a fuel-gauge guess
 
 // Edge-triggered: returns true once per PWR short-press, then clears.
 bool power_hal_pwr_pressed(void);

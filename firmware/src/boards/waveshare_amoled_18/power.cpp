@@ -64,6 +64,7 @@ void power_hal_tick(void) {
 int  power_hal_battery_pct(void) { return cached_pct; }
 bool power_hal_is_charging(void) { return cached_charging; }
 bool power_hal_is_vbus_in(void)  { return cached_vbus; }
+bool power_hal_has_battery(void) { return cached_pct >= 0; }  // fallback: trust the gauge
 
 bool power_hal_pwr_pressed(void) {
     if (pwr_pressed_flag) {

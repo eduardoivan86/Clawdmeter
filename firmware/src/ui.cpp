@@ -559,11 +559,13 @@ void ui_tick_anim(void) {
 static screen_t prev_non_splash_screen = SCREEN_USAGE;
 static void apply_battery_visibility(void) {
     if (!battery_img) return;
-    if (current_screen == SCREEN_SPLASH || current_screen == SCREEN_SONOS) {
-        lv_obj_add_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_obj_clear_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
-    }
+    // Hide on splash (collides with anim) and when no battery is physically
+    // connected (icon would lie — AXP reports floating voltage as "full" or
+    // "charging" when BAT pin is open). SCREEN_SONOS now shows the icon
+    // (top-right corner, above my header at y=30).
+    bool hide = (current_screen == SCREEN_SPLASH) || !power_hal_has_battery();
+    if (hide) lv_obj_add_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
+    else      lv_obj_clear_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void global_click_cb(lv_event_t* e) {
