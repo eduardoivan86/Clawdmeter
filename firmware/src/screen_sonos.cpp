@@ -15,7 +15,10 @@ static const char* TAG = "ui-sonos";
 
 static lv_obj_t* sonos_container = nullptr;
 static lv_obj_t* lbl_room        = nullptr;
-static lv_obj_t* lbl_wifi        = nullptr;
+// WiFi indicator removed from this screen — the shared battery_img sits at the
+// top-right corner on the BT screen / SONOS / USAGE, and WiFi status lives on
+// the BT screen text widget. Keeping a separate wifi label here was
+// duplication + visual collision with the battery icon.
 static lv_obj_t* lbl_vol_num     = nullptr;
 static lv_obj_t* slider_vol      = nullptr;
 static lv_obj_t* btn_play_pause  = nullptr;
@@ -31,17 +34,6 @@ static void update_room_label() {
     lv_label_set_text_fmt(lbl_room, "%s  %s",
                           sonos_ctrl_get_mode_label(),
                           LV_SYMBOL_DOWN);
-}
-
-static void update_wifi_label() {
-    if (!lbl_wifi) return;
-    if (wifi_is_connected()) {
-        lv_label_set_text(lbl_wifi, "WiFi");
-        lv_obj_set_style_text_color(lbl_wifi, THEME_GREEN, 0);
-    } else {
-        lv_label_set_text(lbl_wifi, "no wifi");
-        lv_obj_set_style_text_color(lbl_wifi, THEME_RED, 0);
-    }
 }
 
 static void update_volume_widgets() {
@@ -216,10 +208,6 @@ void screen_sonos_init(lv_obj_t* parent_scr) {
     lv_obj_set_style_text_color(lbl_room, THEME_TEXT, 0);
     lv_obj_align(lbl_room, LV_ALIGN_LEFT_MID, 16, 0);
 
-    lbl_wifi = lv_label_create(header);
-    lv_obj_set_style_text_font(lbl_wifi, &font_styrene_20, 0);
-    lv_obj_align(lbl_wifi, LV_ALIGN_RIGHT_MID, -16, 0);
-
     // ---- Volume big number ----
     lbl_vol_num = lv_label_create(sonos_container);
     lv_obj_set_style_text_font(lbl_vol_num, &font_styrene_48, 0);
@@ -273,7 +261,6 @@ void screen_sonos_init(lv_obj_t* parent_scr) {
     lv_obj_add_event_cb(btn_mute, mute_click_cb, LV_EVENT_CLICKED, NULL);
 
     update_room_label();
-    update_wifi_label();
     update_volume_widgets();
 
     lv_obj_add_flag(sonos_container, LV_OBJ_FLAG_HIDDEN);
@@ -294,7 +281,6 @@ void screen_sonos_hide() {
 
 void screen_sonos_update() {
     update_room_label();
-    update_wifi_label();
     update_volume_widgets();
     update_mute_visual();
     update_play_pause_visual();
