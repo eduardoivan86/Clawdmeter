@@ -19,6 +19,12 @@ static const NimBLEUUID HID_REPORT_UUID  ((uint16_t)0x2A4D);
 static const NimBLEUUID HID_CONTROL_UUID ((uint16_t)0x2A4C);  // exit-suspend control
 static const NimBLEUUID HID_PROTOCOL_UUID((uint16_t)0x2A4E);  // Boot vs Report mode
 
+// Standard BLE Battery Service.
+static const NimBLEUUID BATT_SERVICE_UUID((uint16_t)0x180F);
+static const NimBLEUUID BATT_LEVEL_UUID  ((uint16_t)0x2A19);
+
+static int cached_knob_battery = -1;
+
 // VK-01 Consumer Control usage codes (verified via B2.1 dump).
 // Reports are 2 bytes: [usage_code, 0x00] on press, [0x00, 0x00] on release.
 // The press button emits the SAME code for short and long press — no
@@ -65,6 +71,7 @@ class KnobClientCallbacks : public NimBLEClientCallbacks {
     void onDisconnect(NimBLEClient* c, int reason) override {
         ESP_LOGW(TAG, "disconnected reason=%d", reason);
         connected = false;
+        cached_knob_battery = -1;
         // Resume scanning so we auto-reconnect when the knob wakes up.
         NimBLEDevice::getScan()->start(0, false);
     }
@@ -72,6 +79,13 @@ class KnobClientCallbacks : public NimBLEClientCallbacks {
 
 static KnobAdvertisedCallbacks scan_cbs;
 static KnobClientCallbacks     client_cbs;
+
+static void knob_battery_notify_cb(NimBLERemoteCharacteristic* chr,
+                                   uint8_t* data, size_t len, bool is_notify) {
+    if (len < 1) return;
+    cached_knob_battery = (int)data[0];
+    ESP_LOGI(TAG, "battery=%d%%", cached_knob_battery);
+}
 
 static void knob_notify_cb(NimBLERemoteCharacteristic* chr,
                            uint8_t* data, size_t len, bool is_notify) {
@@ -236,6 +250,23 @@ static bool connect_to_knob() {
         else                              ESP_LOGW(TAG, "Control Point write failed");
     }
 
+    // Battery Service — best-effort. Read once for an initial value, then
+    // subscribe for change notifications (knob updates this ~every minute).
+    NimBLERemoteService* batt = client->getService(BATT_SERVICE_UUID);
+    if (batt) {
+        NimBLERemoteCharacteristic* bl = batt->getCharacteristic(BATT_LEVEL_UUID);
+        if (bl) {
+            std::string v = bl->readValue();
+            if (!v.empty()) {
+                cached_knob_battery = (int)(uint8_t)v[0];
+                ESP_LOGI(TAG, "battery initial=%d%%", cached_knob_battery);
+            }
+            if (bl->canNotify()) {
+                bl->subscribe(true, knob_battery_notify_cb);
+            }
+        }
+    }
+
     ESP_LOGI(TAG, "ready (%d report channel%s), free heap=%u",
              subscribed, subscribed == 1 ? "" : "s",
              (unsigned)ESP.getFreeHeap());
@@ -293,4 +324,8 @@ void knob_scanner_init() {
 
 bool knob_is_connected() {
     return connected;
+}
+
+int knob_get_battery_pct() {
+    return cached_knob_battery;
 }

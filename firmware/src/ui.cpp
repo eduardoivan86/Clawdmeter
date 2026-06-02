@@ -7,6 +7,7 @@
 #include "wifi_manager.h"
 #include "screen_sonos.h"
 #include "sonos_controller.h"
+#include "knob_scanner.h"
 #include "hal/power_hal.h"
 
 // Custom fonts (scaled for 314 PPI, ~1.9x from original 165 PPI)
@@ -65,7 +66,7 @@ static void compute_layout(const BoardCaps& c) {
         L.usage_panel_gap = 16;
         L.usage_bar_y = 56;
         L.usage_reset_y = 94;
-        L.bt_info_panel_h = 200;
+        L.bt_info_panel_h = 230;
         L.bt_reset_zone_h = 110;
         L.bt_title_font    = &font_tiempos_56;
         L.bt_status_font   = &font_styrene_48;
@@ -79,7 +80,7 @@ static void compute_layout(const BoardCaps& c) {
         L.usage_panel_gap = 12;
         L.usage_bar_y = 48;
         L.usage_reset_y = 78;
-        L.bt_info_panel_h = 180;
+        L.bt_info_panel_h = 210;
         L.bt_reset_zone_h = 90;
         L.bt_title_font    = &font_tiempos_34;
         L.bt_status_font   = &font_styrene_28;
@@ -123,6 +124,7 @@ static lv_obj_t* lbl_ble_device;
 static lv_obj_t* lbl_ble_mac;
 static lv_obj_t* lbl_wifi_status;
 static lv_obj_t* lbl_battery_text = nullptr;
+static lv_obj_t* lbl_knob_battery = nullptr;
 
 // ---- Battery indicator (shared, on top) ----
 static lv_obj_t* battery_img;
@@ -412,6 +414,26 @@ static void init_bluetooth_screen(lv_obj_t* scr) {
     lv_obj_set_style_text_font(lbl_battery_text, &font_styrene_20, 0);
     lv_obj_set_style_text_color(lbl_battery_text, COL_DIM, 0);
     lv_obj_set_pos(lbl_battery_text, 0, 168);
+
+    lbl_knob_battery = lv_label_create(p_info);
+    lv_label_set_text(lbl_knob_battery, "");
+    lv_obj_set_style_text_font(lbl_knob_battery, &font_styrene_20, 0);
+    lv_obj_set_style_text_color(lbl_knob_battery, COL_DIM, 0);
+    lv_obj_set_pos(lbl_knob_battery, 0, 196);
+
+    lv_timer_create([](lv_timer_t*) {
+        if (!lbl_knob_battery) return;
+        int kp = knob_get_battery_pct();
+        if (!knob_is_connected() || kp < 0) {
+            lv_label_set_text(lbl_knob_battery, "Knob: --");
+            lv_obj_set_style_text_color(lbl_knob_battery, COL_DIM, 0);
+            return;
+        }
+        lv_label_set_text_fmt(lbl_knob_battery, "Knob: %d%%", kp);
+        if (kp < 15)      lv_obj_set_style_text_color(lbl_knob_battery, COL_RED,   0);
+        else if (kp < 30) lv_obj_set_style_text_color(lbl_knob_battery, COL_AMBER, 0);
+        else              lv_obj_set_style_text_color(lbl_knob_battery, COL_DIM,   0);
+    }, 5000, nullptr);
 
     lv_timer_create([](lv_timer_t*) {
         if (!lbl_battery_text) return;

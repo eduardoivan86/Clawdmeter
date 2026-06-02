@@ -22,3 +22,8 @@
 
 void knob_scanner_init();
 bool knob_is_connected();
+
+// Knob battery percentage from BLE Battery Service (0x180F / 0x2A19).
+// Returns -1 when knob is not connected or the battery value hasn't been
+// reported yet.
+int  knob_get_battery_pct();
