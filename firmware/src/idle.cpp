@@ -17,6 +17,10 @@ static uint32_t fade_started_ms  = 0;
 static uint32_t fade_last_step_ms = 0;
 static uint8_t  fade_from = DISPLAY_DEFAULT_BRIGHTNESS;
 static uint8_t  fade_to   = 0;
+// Distinguish manual long-press sleep from auto-timeout sleep. When set, the
+// USB-keepawake guard in idle_tick must not override — user explicitly asked.
+// Cleared on any wake (button / touch).
+static bool     manual_sleep_requested = false;
 
 static void apply_brightness(uint8_t b) {
     display_hal_set_brightness(b);
@@ -50,6 +54,7 @@ void idle_force_sleep(void) {
     uint32_t now = millis();
     begin_fade(0, now);
     state = STATE_FADING_OUT;
+    manual_sleep_requested = true;
 }
 
 bool idle_consume_wake_press(void) {
@@ -58,6 +63,7 @@ bool idle_consume_wake_press(void) {
         last_activity_ms = now;
         begin_fade(DISPLAY_DEFAULT_BRIGHTNESS, now);
         state = STATE_FADING_IN;
+        manual_sleep_requested = false;
         return true;
     }
     if (state == STATE_FADING_IN) {
@@ -77,9 +83,11 @@ bool idle_is_asleep(void) {
 void idle_tick(void) {
     uint32_t now = millis();
 
-    // While on USB power (if configured), don't sleep — and wake from sleep
-    // when power comes back. Treats USB-in as continuous activity.
-    if (!IDLE_SLEEP_WHEN_CHARGING && power_hal_is_vbus_in()) {
+    // While on USB power (if configured), don't auto-sleep — and wake from
+    // sleep when power comes back. Treats USB-in as continuous activity.
+    // EXCEPT when the user explicitly requested sleep via long-press: that
+    // intent must survive USB presence; respected until the next wake event.
+    if (!IDLE_SLEEP_WHEN_CHARGING && power_hal_is_vbus_in() && !manual_sleep_requested) {
         last_activity_ms = now;
         if (state == STATE_ASLEEP || state == STATE_FADING_OUT) {
             begin_fade(DISPLAY_DEFAULT_BRIGHTNESS, now);
