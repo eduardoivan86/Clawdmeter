@@ -151,6 +151,31 @@ static void send_screenshot() {
         return;
     }
 
+    // Composite lv_layer_top() over the screen snapshot so overlay banners are visible.
+    // Snapshot top layer as ARGB8888 (4 bytes/px) to preserve transparency.
+    lv_obj_t* top = lv_layer_top();
+    const uint32_t top_buf_size = w * h * 4;  // ARGB8888
+    uint8_t* tbuf = (uint8_t*)heap_caps_malloc(top_buf_size, MALLOC_CAP_SPIRAM);
+    if (tbuf) {
+        lv_draw_buf_t top_buf;
+        lv_draw_buf_init(&top_buf, w, h, LV_COLOR_FORMAT_ARGB8888, w * 4, tbuf, top_buf_size);
+        if (lv_snapshot_take_to_draw_buf(top, LV_COLOR_FORMAT_ARGB8888, &top_buf) == LV_RESULT_OK) {
+            // Blend: for each pixel where top layer alpha > 0, overwrite the screen pixel
+            uint16_t* dst = (uint16_t*)sbuf;
+            const uint8_t* src = tbuf;  // ARGB8888: B G R A per pixel (little-endian)
+            for (uint32_t i = 0; i < w * h; i++) {
+                uint8_t b = src[i * 4 + 0];
+                uint8_t g = src[i * 4 + 1];
+                uint8_t r = src[i * 4 + 2];
+                uint8_t a = src[i * 4 + 3];
+                if (a > 32) {  // non-trivially transparent
+                    dst[i] = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+                }
+            }
+        }
+        heap_caps_free(tbuf);
+    }
+
     Serial.printf("SCREENSHOT_START %lu %lu %lu\n",
         (unsigned long)w, (unsigned long)h, (unsigned long)buf_size);
     Serial.flush();

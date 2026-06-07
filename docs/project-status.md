@@ -96,6 +96,16 @@ Eduardo's unit currently has **no battery connected** — only USB power.
 - Heap stable at ~38 KB free after full init (above 25 KB threshold)
 - This document
 
+### Status indicator — stale-data / lost-connection banner ✅
+- `ui.cpp`: global banner on `lv_layer_top()` (floats over all screens). Armed
+  only after the first fresh payload (`ever_received`), so a fresh boot never
+  false-alarms.
+- `ui_note_data_fresh()` stamps `last_fresh_ms` on every OK parse (`main.cpp`).
+- `ui_tick_status()` (per loop): BLE not connected → red `SIN CONEXION`;
+  connected but >3 min since last payload → amber `DATOS VIEJOS - ABRI CLAUDE`;
+  else hidden. Threshold `STALE_THRESHOLD_MS = 180000`.
+- Verified on device: OK / STALE / DISCONNECTED / recovery screenshots.
+
 ## Current memory footprint (post-D)
 
 ```
