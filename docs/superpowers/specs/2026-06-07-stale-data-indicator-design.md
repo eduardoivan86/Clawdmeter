@@ -32,9 +32,14 @@ Toda la lógica vive en el **firmware**. Sin cambios en el daemon, el protocolo 
 ni `data.h`. El firmware ya conoce el estado BLE (`ble_get_state()`), así que puede
 dar un mensaje preciso según la causa:
 
-- BLE `Disconnected` → "SIN CONEXIÓN" (cayó el enlace ESP32↔Mac).
-- BLE `Connected` + datos viejos > 3 min → "DATOS VIEJOS — reabrí claude"
+- BLE `Disconnected` → "SIN CONEXION" (cayó el enlace ESP32↔Mac).
+- BLE `Connected` + datos viejos > 3 min → "DATOS VIEJOS - ABRI CLAUDE"
   (caso típico de token expirado).
+
+> Nota de implementación: el texto del banner es ASCII puro (sin acentos ni
+> glifo `⚠`) porque la fuente bitmap custom `font_styrene_20` no garantiza esos
+> glifos. El color (rojo/ámbar) y la posición fija arriba transmiten la urgencia.
+> Verificado en equipo por screenshot.
 
 El timeout del firmware es la red de seguridad: cubre **todas** las causas (token
 expirado, daemon caído, Mac dormida, caída de red, outage de Anthropic), no solo el
@@ -95,8 +100,8 @@ Una vez `ever_received == true`, evaluación por prioridad:
 
 Acción solo cuando el estado calculado != `last_banner_status`:
 
-- `STATUS_DISCONNECTED` → banner visible, fondo rojo, texto `⚠ SIN CONEXIÓN`.
-- `STATUS_STALE` → banner visible, fondo ámbar, texto `⚠ DATOS VIEJOS — reabrí claude`.
+- `STATUS_DISCONNECTED` → banner visible, fondo rojo, texto `SIN CONEXION`.
+- `STATUS_STALE` → banner visible, fondo ámbar, texto `DATOS VIEJOS - ABRI CLAUDE`.
 - `STATUS_OK` → banner oculto (`LV_OBJ_FLAG_HIDDEN`).
 
 `ui_note_data_fresh()` setea `last_fresh_ms = lv_tick_get()` y `ever_received = true`.
@@ -127,10 +132,10 @@ sigue stale al despertar, sigue visible. Sin manejo especial requerido.
    corto (ej. 15000) y (b) la llamada a `ui_note_data_fresh()` comentada en
    `main.cpp` para que `last_fresh_ms` nunca se refresque mientras el daemon
    mantiene vivo el enlace BLE. Tras ~15s con BLE `Connected`, capturar PNG →
-   banner ámbar "DATOS VIEJOS — reabrí claude". Revertir ambos cambios antes de
+   banner ámbar "DATOS VIEJOS - ABRI CLAUDE". Revertir ambos cambios antes de
    commitear.
 3. **Sin conexión**: `launchctl unload` del daemon LaunchAgent, esperar el disconnect
-   BLE, capturar PNG → banner rojo "SIN CONEXIÓN".
+   BLE, capturar PNG → banner rojo "SIN CONEXION".
 4. **Recuperación**: reabrir claude / recargar el daemon → al llegar el próximo dato
    fresco, `ui_note_data_fresh()` resetea el timer y el banner desaparece. Verificar.
 
@@ -138,7 +143,7 @@ sigue stale al despertar, sigue visible. Sin manejo especial requerido.
 
 - [ ] Tras 3 min sin dato fresco con BLE conectado, aparece el banner ámbar en
       cualquier pantalla activa.
-- [ ] Si el enlace BLE cae, aparece el banner rojo "SIN CONEXIÓN".
+- [ ] Si el enlace BLE cae, aparece el banner rojo "SIN CONEXION".
 - [ ] Un boot recién flasheado (sin datos aún) NO muestra banner.
 - [ ] Al volver a llegar datos frescos, el banner desaparece automáticamente.
 - [ ] Cero regresión en el footprint de heap (banner es un solo label en top layer,
