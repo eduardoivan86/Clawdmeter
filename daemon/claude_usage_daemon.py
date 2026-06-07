@@ -8,6 +8,7 @@ bleak (CoreBluetooth backend on macOS).
 
 import asyncio
 import getpass
+import hashlib
 import json
 import os
 import re
@@ -157,7 +158,8 @@ async def scan_for_device() -> str | None:
     return None
 
 
-async def poll_api(token: str) -> dict | None:
+async def poll_api(token: str) -> tuple[dict | None, int]:
+    """Poll Anthropic. Returns (payload, http_status). status == -1 on network error."""
     headers = dict(API_HEADERS_TEMPLATE)
     headers["Authorization"] = f"Bearer {token}"
     try:
@@ -165,10 +167,10 @@ async def poll_api(token: str) -> dict | None:
             resp = await http.post(API_URL, headers=headers, json=API_BODY)
     except httpx.HTTPError as e:
         log(f"API call failed: {e}")
-        return None
+        return None, -1
     if resp.status_code >= 400:
         log(f"API HTTP {resp.status_code}: {resp.text[:200]}")
-        return None
+        return None, resp.status_code
 
     def hdr(name: str, default: str = "0") -> str:
         return resp.headers.get(name, default)
@@ -197,7 +199,11 @@ async def poll_api(token: str) -> dict | None:
         "st": hdr("anthropic-ratelimit-unified-5h-status", "unknown"),
         "ok": True,
     }
-    return payload
+    return payload, resp.status_code
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()[:16]
 
 
 class Session:
@@ -250,6 +256,11 @@ async def connect_and_run(address: str, stop_event: asyncio.Event) -> bool:
     await session.setup_refresh_subscription()
 
     last_poll = 0.0
+    # If the access token returns 401, remember its hash and skip retries
+    # until the token changes (Claude Code CLI refresh updates the
+    # Keychain). Prevents 5s log spam + needless API hammering while
+    # waiting for the user to re-authenticate.
+    auth_failed_for_hash: str | None = None
     used_successfully = False
     try:
         while client.is_connected and not stop_event.is_set():
@@ -260,12 +271,26 @@ async def connect_and_run(address: str, stop_event: asyncio.Event) -> bool:
                 token = read_token()
                 if not token:
                     log("No token; skipping poll")
+                    last_poll = time.time()
                 else:
-                    payload = await poll_api(token)
-                    if payload is not None:
-                        if await session.write_payload(payload):
-                            last_poll = time.time()
-                            used_successfully = True
+                    t_hash = _token_hash(token)
+                    if auth_failed_for_hash == t_hash:
+                        # Same token that already 401'd — wait for refresh.
+                        log("Auth still failing on cached token (run 'claude' to refresh)")
+                        last_poll = time.time()
+                    else:
+                        payload, status = await poll_api(token)
+                        if payload is not None:
+                            if await session.write_payload(payload):
+                                last_poll = time.time()
+                                used_successfully = True
+                                auth_failed_for_hash = None
+                        elif status == 401:
+                            auth_failed_for_hash = t_hash
+                            last_poll = time.time()  # avoid 5s loop
+                        else:
+                            # network / other — let the loop retry on next tick
+                            pass
 
             try:
                 await asyncio.wait_for(session.refresh_requested.wait(), timeout=TICK)

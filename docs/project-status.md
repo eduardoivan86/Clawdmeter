@@ -153,10 +153,22 @@ In rough priority:
 ## Daemon (Mac side, not in this repo)
 
 - LaunchAgent at `~/Library/LaunchAgents/com.user.claude-usage-daemon.plist` (local change, not committed to fork)
-- Python script at `~/dev/Clawdmeter/daemon/claude_usage_daemon.py` (local fork modifications — Eduardo's sed patches, intentionally not committed)
+- Python script at `~/dev/Clawdmeter/daemon/claude_usage_daemon.py`
 - 60 s poll cycle: reads `~/.claude` credentials → polls api.anthropic.com → BLE GATT write to ESP32
 
-Status: working. No changes from this session.
+### 401 auth-failure handling (committed)
+- `poll_api()` now returns `(payload, http_status)` so the loop can distinguish a
+  401 from a network error.
+- On HTTP 401 the loop caches the access-token hash (`_token_hash`) and stops
+  re-polling until the token changes (running `claude` refreshes the Keychain
+  token → new hash → polling resumes; a success resets the cache).
+- Prevents 5 s log spam + needless API hammering while the user re-authenticates.
+- Pairs with the firmware status banner: on a 401 the daemon goes quiet → no
+  fresh GATT writes → after 3 min the ESP shows amber `DATOS VIEJOS - ABRI CLAUDE`.
+
+Status: working. This is the first daemon change committed to the fork (prior
+local mods were environment-specific and intentionally untracked; this one is a
+self-contained, secret-free improvement worth versioning).
 
 ## How to verify after pulling this branch
 
