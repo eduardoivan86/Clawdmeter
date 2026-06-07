@@ -151,7 +151,7 @@ enum status_kind_t { STATUS_OK = 0, STATUS_STALE = 1, STATUS_DISCONNECTED = 2 };
 static lv_obj_t* status_banner    = nullptr;
 static uint32_t  last_fresh_ms    = 0;
 static bool      ever_received    = false;   // arm only after first fresh payload
-static int       last_banner_kind = -1;      // cache so we only touch LVGL on change
+static status_kind_t last_banner_kind = (status_kind_t)-1;  // cache; sentinel forces first paint
 
 static const char* const spinner_frames[] = {
     "\xC2\xB7", "\xE2\x9C\xBB", "\xE2\x9C\xBD",
@@ -545,6 +545,7 @@ void ui_init(void) {
     // persists across screen switches. Hidden until armed + stale/disconnected.
     status_banner = lv_label_create(lv_layer_top());
     lv_obj_set_width(status_banner, L.scr_w - 2 * L.margin);
+    lv_obj_set_height(status_banner, LV_SIZE_CONTENT);
     lv_obj_set_style_radius(status_banner, 8, 0);
     lv_obj_set_style_bg_opa(status_banner, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(status_banner, COL_RED, 0);
@@ -583,6 +584,43 @@ void ui_update(const UsageData* data) {
 void ui_note_data_fresh(void) {
     last_fresh_ms = lv_tick_get();
     ever_received = true;
+}
+
+void ui_tick_status(void) {
+    if (!status_banner) return;
+
+    status_kind_t kind;
+    if (!ever_received) {
+        // Not armed yet: fresh boot before the first payload. Never alarm —
+        // BLE is ADVERTISING/INIT during the normal connect window.
+        kind = STATUS_OK;
+    } else if (ble_get_state() != BLE_STATE_CONNECTED) {
+        kind = STATUS_DISCONNECTED;
+    } else if ((lv_tick_get() - last_fresh_ms) > STALE_THRESHOLD_MS) {
+        kind = STATUS_STALE;
+    } else {
+        kind = STATUS_OK;
+    }
+
+    if (kind == last_banner_kind) return;   // only touch LVGL on a real change
+    last_banner_kind = kind;
+
+    switch (kind) {
+        case STATUS_DISCONNECTED:
+            lv_obj_set_style_bg_color(status_banner, COL_RED, 0);
+            lv_label_set_text(status_banner, "SIN CONEXION");
+            lv_obj_clear_flag(status_banner, LV_OBJ_FLAG_HIDDEN);
+            break;
+        case STATUS_STALE:
+            lv_obj_set_style_bg_color(status_banner, COL_AMBER, 0);
+            lv_label_set_text(status_banner, "DATOS VIEJOS - ABRI CLAUDE");
+            lv_obj_clear_flag(status_banner, LV_OBJ_FLAG_HIDDEN);
+            break;
+        case STATUS_OK:
+        default:
+            lv_obj_add_flag(status_banner, LV_OBJ_FLAG_HIDDEN);
+            break;
+    }
 }
 
 void ui_tick_anim(void) {
