@@ -143,6 +143,16 @@ static uint8_t anim_msg_idx = 0;
 static uint32_t anim_msg_start = 0;
 #define ANIM_MSG_MS     4000
 
+// ---- Connection / freshness status banner (top layer, all screens) ----
+#define STALE_THRESHOLD_MS 180000   // 3 min = ~3 missed daemon polls (poll ~60s)
+
+enum status_kind_t { STATUS_OK = 0, STATUS_STALE = 1, STATUS_DISCONNECTED = 2 };
+
+static lv_obj_t* status_banner    = nullptr;
+static uint32_t  last_fresh_ms    = 0;
+static bool      ever_received    = false;   // arm only after first fresh payload
+static int       last_banner_kind = -1;      // cache so we only touch LVGL on change
+
 static const char* const spinner_frames[] = {
     "\xC2\xB7", "\xE2\x9C\xBB", "\xE2\x9C\xBD",
     "\xE2\x9C\xB6", "\xE2\x9C\xB3", "\xE2\x9C\xA2",
@@ -530,6 +540,22 @@ void ui_init(void) {
     battery_img = lv_image_create(scr);
     lv_image_set_src(battery_img, &battery_dscs[0]);
     lv_obj_set_pos(battery_img, L.scr_w - 48 - L.margin, L.title_y);
+
+    // Global status banner on the top layer — floats above every screen,
+    // persists across screen switches. Hidden until armed + stale/disconnected.
+    status_banner = lv_label_create(lv_layer_top());
+    lv_obj_set_width(status_banner, L.scr_w - 2 * L.margin);
+    lv_obj_set_style_radius(status_banner, 8, 0);
+    lv_obj_set_style_bg_opa(status_banner, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(status_banner, COL_RED, 0);
+    lv_obj_set_style_text_color(status_banner, lv_color_black(), 0);
+    lv_obj_set_style_text_font(status_banner, &font_styrene_20, 0);
+    lv_obj_set_style_text_align(status_banner, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_ver(status_banner, 8, 0);
+    lv_obj_set_style_pad_hor(status_banner, 8, 0);
+    lv_label_set_long_mode(status_banner, LV_LABEL_LONG_WRAP);
+    lv_obj_align(status_banner, LV_ALIGN_TOP_MID, 0, L.margin);
+    lv_obj_add_flag(status_banner, LV_OBJ_FLAG_HIDDEN);
 }
 
 void ui_update(const UsageData* data) {
@@ -552,6 +578,11 @@ void ui_update(const UsageData* data) {
 
     format_reset_time(data->weekly_reset_mins, buf, sizeof(buf));
     lv_label_set_text(lbl_weekly_reset, buf);
+}
+
+void ui_note_data_fresh(void) {
+    last_fresh_ms = lv_tick_get();
+    ever_received = true;
 }
 
 void ui_tick_anim(void) {
