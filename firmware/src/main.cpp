@@ -247,6 +247,7 @@ void loop() {
     idle_tick();
     lv_timer_handler();
     ui_tick_anim();
+    ui_tick_status();
     ble_tick();
     power_hal_tick();
     imu_hal_tick();
@@ -340,6 +341,7 @@ void loop() {
                 if (splash_is_active()) splash_pick_for_current_rate();
             }
             ui_update(&usage);
+            ui_note_data_fresh();
             ble_send_ack();
         } else {
             ble_send_nack();

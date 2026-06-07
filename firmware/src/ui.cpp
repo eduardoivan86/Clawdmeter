@@ -146,12 +146,12 @@ static uint32_t anim_msg_start = 0;
 // ---- Connection / freshness status banner (top layer, all screens) ----
 #define STALE_THRESHOLD_MS 180000   // 3 min = ~3 missed daemon polls (poll ~60s)
 
-enum status_kind_t { STATUS_OK = 0, STATUS_STALE = 1, STATUS_DISCONNECTED = 2 };
+enum status_kind_t { STATUS_NONE = -1, STATUS_OK = 0, STATUS_STALE = 1, STATUS_DISCONNECTED = 2 };
 
 static lv_obj_t* status_banner    = nullptr;
 static uint32_t  last_fresh_ms    = 0;
 static bool      ever_received    = false;   // arm only after first fresh payload
-static status_kind_t last_banner_kind = (status_kind_t)-1;  // cache; sentinel forces first paint
+static status_kind_t last_banner_kind = STATUS_NONE;  // sentinel forces first paint
 
 static const char* const spinner_frames[] = {
     "\xC2\xB7", "\xE2\x9C\xBB", "\xE2\x9C\xBD",
