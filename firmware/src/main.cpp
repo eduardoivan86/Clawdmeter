@@ -211,12 +211,17 @@ void setup() {
     delay(300);
     Serial.println("{\"ready\":true}");
 
+    // ipc1 stack-canary workaround — this is the ACTIVE fix.
     // Pre-install the GPIO ISR service from the main task (4 KB stack) so the
     // heavy esp_intr_alloc -> heap_caps_malloc path doesn't fire later from
     // the ipc1 task (1 KB stack, baked into the precompiled IDF). Without
     // this, the cross-core ISR register triggered inside the touch driver
     // would overflow the ipc1 canary intermittently. ESP_OK on first call,
     // ESP_ERR_INVALID_STATE on already-installed (both harmless here).
+    // The root-cause fix (custom_sdkconfig CONFIG_ESP_IPC_TASK_STACK_SIZE=2048)
+    // was attempted 2026-06-08 but the pioarduino framework rebuild fails to
+    // link (__wrap_log_printf); see platformio.ini. Until that's resolved and
+    // boot-verified on a live board, this workaround stays.
     gpio_install_isr_service(0);
 
     board_init();
