@@ -13,6 +13,45 @@ LV_FONT_DECLARE(lv_font_montserrat_28);
 
 static const char* TAG = "ui-sonos";
 
+// Geometry for this screen, picked from the board's height the same way
+// compute_layout() does for the shared screens. The large branch reproduces
+// the original 480x480 (AMOLED-2.16) values exactly; the compact branch keeps
+// every widget inside a 368x448 (AMOLED-1.8) panel — the old hardcoded mute at
+// y=400 (+56) overflowed the 448-tall display.
+struct SonosLayout {
+    int16_t header_y, header_h;
+    int16_t volnum_y;
+    const lv_font_t* volnum_font;
+    int16_t slider_y, slider_h;
+    int16_t transport_y, transport_h, transport_btn_w, transport_btn_h;
+    int16_t mute_y, mute_w, mute_h;
+    int16_t sel_btn_w, sel_btn_h;
+};
+static SonosLayout SL = {};
+
+static void compute_sonos_layout() {
+    const int H = board_caps().height;
+    const int W = board_caps().width;
+    if (H >= 460) {
+        // Large — original 480x480 values, unchanged.
+        SL.header_y = 30;  SL.header_h = 70;
+        SL.volnum_y = 130; SL.volnum_font = &font_styrene_48;
+        SL.slider_y = 230; SL.slider_h = 22;
+        SL.transport_y = 290; SL.transport_h = 90; SL.transport_btn_w = 88; SL.transport_btn_h = 72;
+        SL.mute_y = 400; SL.mute_w = 72; SL.mute_h = 56;
+        SL.sel_btn_w = 380; SL.sel_btn_h = 80;
+    } else {
+        // Compact — tuned for 368x448 (AMOLED-1.8). Everything fits above 448
+        // with a bottom margin, fonts/buttons shrunk for the narrower panel.
+        SL.header_y = 24;  SL.header_h = 60;
+        SL.volnum_y = 96;  SL.volnum_font = &font_styrene_28;
+        SL.slider_y = 180; SL.slider_h = 20;
+        SL.transport_y = 240; SL.transport_h = 80; SL.transport_btn_w = 80; SL.transport_btn_h = 64;
+        SL.mute_y = 350; SL.mute_w = 64; SL.mute_h = 52;
+        SL.sel_btn_w = W - 40; SL.sel_btn_h = 70;
+    }
+}
+
 static lv_obj_t* sonos_container = nullptr;
 static lv_obj_t* lbl_room        = nullptr;
 // WiFi indicator removed from this screen — the shared battery_img sits at the
@@ -68,7 +107,7 @@ static void selector_btn_cb(lv_event_t* e) {
 
 static lv_obj_t* make_selector_btn(lv_obj_t* parent, const char* text, SonosMode m) {
     lv_obj_t* btn = lv_button_create(parent);
-    lv_obj_set_size(btn, 380, 80);
+    lv_obj_set_size(btn, SL.sel_btn_w, SL.sel_btn_h);
     lv_obj_set_style_bg_color(btn, THEME_PANEL, 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(btn, 14, 0);
@@ -163,7 +202,7 @@ static void mute_click_cb(lv_event_t*) {
 
 static lv_obj_t* make_transport_btn(lv_obj_t* parent, const char* sym, lv_event_cb_t cb) {
     lv_obj_t* btn = lv_button_create(parent);
-    lv_obj_set_size(btn, 88, 72);
+    lv_obj_set_size(btn, SL.transport_btn_w, SL.transport_btn_h);
     lv_obj_set_style_bg_color(btn, THEME_PANEL, 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(btn, 14, 0);
@@ -180,6 +219,7 @@ static lv_obj_t* make_transport_btn(lv_obj_t* parent, const char* sym, lv_event_
 void screen_sonos_init(lv_obj_t* parent_scr) {
     const int W = board_caps().width;
     const int H = board_caps().height;
+    compute_sonos_layout();
 
     sonos_container = lv_obj_create(parent_scr);
     lv_obj_set_size(sonos_container, W, H);
@@ -191,8 +231,8 @@ void screen_sonos_init(lv_obj_t* parent_scr) {
 
     // ---- Header (tappable, room name + wifi mini) ----
     lv_obj_t* header = lv_obj_create(sonos_container);
-    lv_obj_set_size(header, W - 40, 70);
-    lv_obj_set_pos(header, 20, 30);
+    lv_obj_set_size(header, W - 40, SL.header_h);
+    lv_obj_set_pos(header, 20, SL.header_y);
     lv_obj_set_style_bg_color(header, THEME_PANEL, 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(header, 12, 0);
@@ -210,15 +250,15 @@ void screen_sonos_init(lv_obj_t* parent_scr) {
 
     // ---- Volume big number ----
     lbl_vol_num = lv_label_create(sonos_container);
-    lv_obj_set_style_text_font(lbl_vol_num, &font_styrene_48, 0);
+    lv_obj_set_style_text_font(lbl_vol_num, SL.volnum_font, 0);
     lv_obj_set_style_text_color(lbl_vol_num, THEME_TEXT, 0);
     lv_label_set_text(lbl_vol_num, "--");
-    lv_obj_align(lbl_vol_num, LV_ALIGN_TOP_MID, 0, 130);
+    lv_obj_align(lbl_vol_num, LV_ALIGN_TOP_MID, 0, SL.volnum_y);
 
     // ---- Slider ----
     slider_vol = lv_slider_create(sonos_container);
-    lv_obj_set_size(slider_vol, W - 80, 22);
-    lv_obj_align(slider_vol, LV_ALIGN_TOP_MID, 0, 230);
+    lv_obj_set_size(slider_vol, W - 80, SL.slider_h);
+    lv_obj_align(slider_vol, LV_ALIGN_TOP_MID, 0, SL.slider_y);
     lv_slider_set_range(slider_vol, 0, 100);
     lv_slider_set_value(slider_vol, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(slider_vol, THEME_BAR_BG, LV_PART_MAIN);
@@ -231,8 +271,8 @@ void screen_sonos_init(lv_obj_t* parent_scr) {
 
     // ---- Transport row (prev / play_pause / next) ----
     lv_obj_t* row = lv_obj_create(sonos_container);
-    lv_obj_set_size(row, W - 40, 90);
-    lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 290);
+    lv_obj_set_size(row, W - 40, SL.transport_h);
+    lv_obj_align(row, LV_ALIGN_TOP_MID, 0, SL.transport_y);
     lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row, 0, 0);
     lv_obj_set_style_pad_all(row, 0, 0);
@@ -247,8 +287,8 @@ void screen_sonos_init(lv_obj_t* parent_scr) {
 
     // ---- Mute (bottom) ----
     lv_obj_t* btn_mute = lv_button_create(sonos_container);
-    lv_obj_set_size(btn_mute, 72, 56);
-    lv_obj_align(btn_mute, LV_ALIGN_TOP_MID, 0, 400);
+    lv_obj_set_size(btn_mute, SL.mute_w, SL.mute_h);
+    lv_obj_align(btn_mute, LV_ALIGN_TOP_MID, 0, SL.mute_y);
     lv_obj_set_style_bg_color(btn_mute, THEME_PANEL, 0);
     lv_obj_set_style_bg_opa(btn_mute, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(btn_mute, 12, 0);
