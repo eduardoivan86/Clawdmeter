@@ -1,8 +1,18 @@
 # Clawdmeter fork — project status
 
-Last update: 2026-05-27. Branch: `feat/sonos-control` (pushed to `origin`, fork: `eduardoivan86/Clawdmeter`).
+Last update: 2026-06-08. Branch: `feat/sonos-control` (pushed to `origin`, fork: `eduardoivan86/Clawdmeter`).
 
 This document is the canonical bookmark between sessions. Reading it should give a complete picture of the state of the fork without needing to dig through git log or chat history.
+
+> ⚠️ **HARDWARE STATUS (2026-06-08): the 2.16 unit is DEAD.** Eduardo's
+> Waveshare AMOLED-2.16 powered off the instant it was plugged into a faulty
+> coil-whining USB-C wall charger and never came back. Diagnosis: screen dark,
+> **zero USB enumeration even in BOOT/ROM download mode**, persists after a full
+> PMU power-drain reset → electrical damage to the AXP2101 PMU / input regulator
+> from an overvoltage event. Not software-recoverable. Needs a replacement board
+> (same model) + reflash from this branch, then clear the daemon's cached BLE MAC
+> (factory-burned per chip). **On-hardware verification of the 2026-06-08 commits
+> below is deferred until a replacement board arrives.**
 
 ## Hardware
 
@@ -120,35 +130,72 @@ Net free after init: **~38 KB**. Margin to 25 KB threshold: ~13 KB.
 
 ## Known issues
 
-1. **`ipc1` stack canary potential regression**: the fix from Phase B is empirically solid (5/5 boots clean) but is a workaround, not a root-cause patch. If a future change adds binary in a way that shifts the cross-core ISR allocation path past the canary, panics could return. **Mitigation**: pre-install was the cheapest win; the proper fix is `custom_sdkconfig CONFIG_ESP_IPC_TASK_STACK_SIZE=2048` in pioarduino (heavy — rebuilds the framework).
+1. **`ipc1` stack canary** — still on the Phase B workaround
+   (`gpio_install_isr_service(0)` pre-install in `setup()`, empirically 5/5 clean
+   boots). The root-cause fix `custom_sdkconfig CONFIG_ESP_IPC_TASK_STACK_SIZE=2048`
+   was attempted 2026-06-08 and **reverted**: enabling custom_sdkconfig forces a
+   from-source ESP-IDF framework rebuild that fails to link on this platform
+   (55.03.38-1) with `undefined reference to __wrap_log_printf` (Arduino WiFi log
+   shim). To retry: resolve that link issue (likely needs a matching log/wrap
+   sdkconfig entry or a newer pioarduino release) AND validate 5/5 boots on a live
+   board. Config is left commented in `platformio.ini` with the full note.
 
 2. **LV_EVENT_GESTURE doesn't fire on CST9220 driver in LVGL 9.5**: the swipe-down gesture intended for the Sonos selector never triggered. Replaced by long-press on the header. Gesture code removed (was dead). Re-evaluate on LVGL upgrade or touch driver swap.
 
-3. **Layout not responsive to AMOLED-1.8 board**: hardcoded for 480×480. The compact font variants exist in `compute_layout()` but the SONOS screen positions (slider y=230, transport row y=290, etc.) assume the 2.16 panel. Out of scope for Eduardo.
+3. ~~**Layout not responsive to AMOLED-1.8 board**~~ — RESOLVED 2026-06-08. The
+   SONOS screen positions now live in a `SonosLayout` struct in `screen_sonos.cpp`
+   with a compact (368×448) branch. The usage/BT screens were already responsive
+   via `compute_layout()`. Compile-verified on both envs; visual QA on the 1.8
+   panel still pending (no 1.8 board on hand).
 
-4. **Captive portal trigger is API-only**: `wifi_force_setup_mode()` exists but is only auto-invoked when no real credentials exist. There is no button-combo or UI trigger to force setup mode while Eduardo has working creds. Add one in a future B3b commit.
+4. ~~**Captive portal trigger is API-only**~~ — RESOLVED. A long-press on the WiFi
+   label on the BT screen opens a "Cambiar WiFi?" confirm overlay that calls
+   `wifi_force_setup_mode()` (ui.cpp). No longer requires wiping `secrets.h`.
 
 5. **Knob press behaviour unknown**: until Eduardo unpairs the knob from his Mac and `nRF Connect`-dumps the HID reports (B2.1), we don't know if the press emits Mute (`0xE2`), Play/Pause (`0xCD`), or both. The B2.2 parser is blocked on that dump.
 
-## Next steps
+### 2026-06-08 session — backlog cleanup (committed locally, compile-verified, NOT yet flash-verified)
 
-In rough priority:
+Done this session (the board was already dead, so all are verified via `pio run`
+only — on-hardware QA pending the replacement):
 
-1. **B2.1 + B2.2** — Knob HID dump + parser. Requires:
-   - Eduardo: unpair knob from Mac (Settings → Bluetooth → Forget), confirm BT mode switch, charge.
-   - Inspect serial logs from the existing `knob_scanner` skeleton (already dumps every notify with `ESP_LOG_BUFFER_HEX`) once the knob is in range and unpaired.
-   - Write the parser in `knob_scanner.cpp`: map Consumer Control codes to `sonos_ctrl_*` calls. Knob input must NOT call `idle_consume_wake_press()` — silent input, music control while display dark.
-   - Acceleration / throttle policy: `±2` step, debounce at 100 ms.
+- **Per-screen polling pause** ✅ — `sonos_poll_task` now `continue`s when
+  `idle_is_asleep()`; no more 5 s `getVolume` SOAP round-trips behind a dark panel.
+- **Responsive SCREEN_SONOS layout** ✅ — positions extracted into a
+  `SonosLayout` struct in `screen_sonos.cpp`, picked by a height breakpoint. Large
+  branch reproduces the 480×480 values exactly; compact branch fits 368×448 (the
+  old mute at y=400+56 and 380px selector buttons overflowed the 1.8 panel).
+- **AMOLED-1.8 env was unbuildable** ✅ fixed — it had compiled the Sonos source
+  (via `+<*>`) without the `rupakpoddar/Sonos` dep (`Sonos.h not found`) and
+  without `-DLV_FONT_MONTSERRAT_28=1` (`undefined reference to lv_font_montserrat_28`).
+  Both added to the 1.8 env. `pio run -e waveshare_amoled_18` now SUCCEEDS.
+- **Stack-canary root-cause fix** ⚠️ **ATTEMPTED, BLOCKED — reverted.** Enabling
+  `custom_sdkconfig CONFIG_ESP_IPC_TASK_STACK_SIZE=2048` forces pioarduino to
+  rebuild Arduino from ESP-IDF source instead of the precompiled libs. On this
+  platform (55.03.38-1) that build fails to link with `undefined reference to
+  __wrap_log_printf` (the Arduino WiFi log shim isn't provided in the from-source
+  build). The config is left commented in `platformio.ini` with the diagnosis.
+  The **active fix remains the `gpio_install_isr_service(0)` workaround** in
+  `main.cpp setup()` (empirically 5/5 clean boots). Revisit on the live board.
 
-2. **B3b continued — captive portal trigger UI**: a long-press combo (e.g., PRIMARY + SECONDARY held 5 s, or a screen + tap) that calls `wifi_force_setup_mode()`. Currently the captive portal is reachable only by wiping `secrets.h` macros.
+## Next steps (when the replacement board arrives)
 
-3. **Stack canary root-cause patch**: try pioarduino `custom_sdkconfig CONFIG_ESP_IPC_TASK_STACK_SIZE=2048`. Drops the workaround in `setup()`. Heavy because it triggers a full framework rebuild.
+1. **Flash + boot-verify the 2026-06-08 commits** — confirm 5/5 clean boots and
+   eyeball the Sonos screen layout (especially on a 1.8 panel if available).
+2. **Retry the stack-canary root-cause fix** — resolve the pioarduino
+   `__wrap_log_printf` link error under `custom_sdkconfig` (commented in
+   `platformio.ini`), then validate it gives 5/5 clean boots. Only then drop the
+   `gpio_install_isr_service(0)` workaround in `main.cpp setup()`.
+3. **Clear the daemon's cached BLE MAC** — the new chip has a new factory-burned
+   address; the cache at `~/.config/claude-usage-monitor/ble-address` (or the
+   bluez entry) points at the dead `28:84:85:55:65:59`.
+4. **Knob battery indicator** (B2 polish) — show the knob battery % on the BT
+   screen alongside the device battery. (Knob battery subscription already exists
+   per commit `bea7492`; verify it still surfaces.)
 
-4. **Layout responsiveness for AMOLED-1.8**: extract SCREEN_SONOS positions into the `Layout` struct so the compact variant doesn't overlap.
-
-5. **Per-screen polling pause**: the Sonos poll task fires every 5 s regardless of display state. While the display is asleep, polling still costs WiFi airtime / heap churn. Consider gating polling on `!idle_is_asleep()` to save power.
-
-6. **Knob battery indicator**: future B2 polish — show the knob battery % on the BT screen alongside the device battery.
+Everything from the previous "Next steps" list is now done: B2 knob HID parser
+(`2e41379`), captive-portal trigger UI (long-press WiFi label, `30841ce`),
+stale-data banner, per-screen polling pause, and the 1.8 layout.
 
 ## Daemon (Mac side, not in this repo)
 
