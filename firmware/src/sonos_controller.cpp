@@ -4,6 +4,7 @@
 #include "ui.h"
 #include "screen_sonos.h"
 #include "sonos_grouping.h"
+#include "idle.h"
 #include <Arduino.h>
 #include <Sonos.h>
 #include <Preferences.h>
@@ -67,6 +68,10 @@ static void sonos_poll_task(void* arg) {
     (void)arg;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(5000));
+        // Sleep gates polling: while the panel is dark the SONOS screen stays
+        // "current" but nobody can see a volume refresh, so skip the SOAP round
+        // trip — saves WiFi airtime + heap churn until the display wakes.
+        if (idle_is_asleep())                        continue;
         if (ui_get_current_screen() != SCREEN_SONOS) continue;
         if (!wifi_is_connected())                    continue;
         if (sonos_ctrl_refresh_volume()) {
